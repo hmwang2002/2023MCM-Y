@@ -1,0 +1,143 @@
+```python
+import pandas as pd
+import matplotlib.pyplot as plt
+from datetime import datetime
+import warnings
+import seaborn as sns
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error
+from sklearn.metrics import accuracy_score
+import numpy as np
+
+
+if __name__ == '__main__':
+    dataPath = 'exp.xlsx'
+    data = pd.read_excel(dataPath)
+
+    sns.set(style='whitegrid', palette='tab10')
+
+    # Observe the data density distribution
+    fig = plt.figure()
+    ax = sns.displot(data['Price'], )
+    ax.set(xlabel='Price', title='Distribution of Price', )
+    plt.show()
+
+    # Handle outliers
+    mean = np.mean(data['Price'])
+    std = np.std(data['Price'])
+    threshold = 3 * std
+    data_WithoutOutliers = data[np.abs(data['Price'] - mean) <= threshold]
+
+    # Look at the density distribution of the data again
+    fig = plt.figure()
+    ax = sns.displot(data=data_WithoutOutliers['Price'])
+    ax.set(xlabel='Price', title='Distribution of Price without outliers')
+    plt.show()
+
+    fig = plt.figure()
+    ax1 = sns.displot(data_WithoutOutliers['Y'])
+    ax2 = sns.displot(data_WithoutOutliers['L'])
+    plt.show()
+
+    # read data
+    data = pd.get_dummies(data, columns=['Make'])
+    features = data.drop(['Price', 'Longitude', 'Latitude'], axis=1)
+    feature_list = list(features.columns)
+    features = np.array(features)
+    labels = np.array(data['Price'])
+
+    # Data padding with random forest
+
+    # View data distribution
+    sns.pairplot(data_WithoutOutliers, x_vars=['Y', 'L', 'flag'],
+                 y_vars=['Price'])
+    plt.show()
+
+    # correlation matrix
+    corrDF = data_WithoutOutliers.corr()
+    corrDF['Price'].sort_values(ascending=False)
+    # Set the pandas display options to display the DataFrame in its entirety
+    pd.set_option('display.max_rows', None)
+    pd.set_option('display.max_columns', None)
+    print(corrDF)
+
+    # Split the dataset into training set and test set
+    train_features, test_features, train_labels, test_labels = train_test_split(features, labels, test_size = 0.25, random_state=42)
+    print('Training Features Shape:', train_features.shape)
+    print('Training Labels Shape:', train_labels.shape)
+    print('Testing Features Shape:', test_features.shape)
+    print('Testing Labels Shape:', test_labels.shape)
+
+    # 创建随机森林模型
+    rmodel = RandomForestRegressor(n_estimators=1000, random_state=42)
+
+    # Create a random forest model
+    rmodel.fit(train_features, train_labels)
+    # prediction test set
+    predictions = rmodel.predict(test_features)
+    errors = abs(predictions - test_labels)
+    print('Mean Absolute Error:', round(np.mean(errors), 2), '$')
+
+    # Calculate the mean absolute percent error (MAPE)
+    mape = 100 * (errors / test_labels)
+    # Compute and display precision
+    accuracy = 100 - np.mean(mape)
+    print('Accuracy:', round(accuracy, 2), '%.')
+    score = rmodel.score(test_features, test_labels)
+    print('Score:', score)
+
+    importances = list(rmodel.feature_importances_)
+    feature_importances = [(feature, round(importance, 2)) for feature, importance in zip(feature_list, importances)]
+    feature_importances = sorted(feature_importances, key=lambda x:x[1], reverse=True)
+
+    [print('Variable: {:20} Importance: {}'.format(*pair)) for pair in feature_importances];
+
+    # Repurpose the two most important features for modeling
+    rmodel_most_important = RandomForestRegressor(n_estimators=1000, random_state=42)
+    important_indices = [feature_list.index('Y'), feature_list.index('L')]
+    train_important = train_features[:, important_indices]
+    test_important = test_features[:, important_indices]
+
+    rmodel_most_important.fit(train_important, train_labels)
+    predictions = rmodel_most_important.predict(test_important)
+    errors = abs(predictions - test_labels)
+    print('Mean Absolute Error:', round(np.mean(errors), 2), '$')
+    mape = 100 * (errors / test_labels)
+    accuracy = 100 - np.mean(mape)
+    print('Accuracy:', round(accuracy, 2), '%.')
+    score = rmodel.score(test_features, test_labels)
+    print('Score:', score)
+
+    # visualization
+    plt.figure(figsize=(9,6))
+    plt.plot(range(len(test_labels)), test_labels, label='real')
+    plt.plot(range(len(predictions)), predictions, label='predict')
+    plt.legend(loc='upper right')
+    plt.show()
+
+```
+
+重要因素排序
+
+Variable: Y                    Importance: 0.52
+Variable: L                    Importance: 0.48
+Variable: flag                 Importance: 0.0
+Variable: Make_Beneteau        Importance: 0.0
+
+准确度评分
+
+Mean Absolute Error: 35961.81 $
+Accuracy: 84.78 %.
+Score: 0.7205523914299928
+
+相关度
+
+Y         L     Price  Longitude  Latitude  flag
+
+Y          1.000000 -0.383286  0.448741  -0.046713 -0.175250   NaN
+L         -0.383286  1.000000  0.390219   0.027943 -0.022781   NaN
+Price      0.448741  0.390219  1.000000   0.004696  0.168650   NaN
+Longitude -0.046713  0.027943  0.004696   1.000000  0.625246   NaN
+Latitude  -0.175250 -0.022781  0.168650   0.625246  1.000000   NaN
+flag            NaN       NaN       NaN        NaN       NaN   NaN
